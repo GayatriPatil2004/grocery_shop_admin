@@ -7,6 +7,8 @@ import toast from 'react-hot-toast';
 export default function CategoryFormModal({ isOpen, category, onClose, onUpdate }) {
   const [name, setName] = useState('');
   const [image, setImage] = useState('');
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -17,15 +19,30 @@ export default function CategoryFormModal({ isOpen, category, onClose, onUpdate 
       if (isEdit) {
         setName(category.name || '');
         setImage(category.image || '');
+        setImagePreview(category.image || '');
         setDescription(category.description || '');
       } else {
         setName('');
         setImage('');
+        setImageFile(null);
+        setImagePreview('');
         setDescription('');
       }
     }, 0);
     return () => clearTimeout(timer);
   }, [category, isEdit]);
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -43,10 +60,10 @@ export default function CategoryFormModal({ isOpen, category, onClose, onUpdate 
 
     try {
       if (isEdit) {
-        await categoryService.updateCategory(category.id, categoryData);
+        await categoryService.updateCategory(category.id, categoryData, imageFile);
         toast.success('Category updated successfully');
       } else {
-        await categoryService.addCategory(categoryData);
+        await categoryService.addCategory(categoryData, imageFile);
         toast.success('Category added successfully');
       }
       onUpdate();
@@ -104,16 +121,31 @@ export default function CategoryFormModal({ isOpen, category, onClose, onUpdate 
             />
           </div>
 
-          {/* Category Image URL */}
+          {/* Category Image Upload */}
           <div className="space-y-1.5 text-left">
-            <label className="text-xs font-bold text-slate-600 dark:text-slate-400 ml-1">Category Cover Image URL</label>
-            <input
-              type="url"
-              value={image}
-              onChange={(e) => setImage(e.target.value)}
-              placeholder="https://example.com/image.jpg"
-              className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-[#1a1a3e] text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-orange-500/25 focus:border-orange-500 text-sm font-semibold transition-all"
-            />
+            <label className="text-xs font-bold text-slate-600 dark:text-slate-400 ml-1">Category Image *</label>
+            <div className="flex flex-col gap-3">
+              {imagePreview && (
+                <div className="relative w-full h-32 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800">
+                  <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                </div>
+              )}
+              <div className="relative">
+                <input
+                  type="file"
+                  onChange={handleImageChange}
+                  accept="image/*"
+                  className="hidden"
+                  id="category-image"
+                />
+                <label 
+                  htmlFor="category-image"
+                  className="w-full px-4 py-2.5 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-[#1a1a3e] text-slate-400 dark:text-slate-600 hover:border-orange-500 hover:text-orange-500 transition-all cursor-pointer flex items-center justify-center gap-2 text-sm font-bold"
+                >
+                  <X className="w-4 h-4 rotate-45" /> {imagePreview ? 'Change Image' : 'Upload Image'}
+                </label>
+              </div>
+            </div>
           </div>
 
           {/* Description */}
@@ -123,7 +155,7 @@ export default function CategoryFormModal({ isOpen, category, onClose, onUpdate 
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Describe the type of products in this category..."
-              rows="4"
+              rows="3"
               className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-[#1a1a3e] text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-orange-500/25 focus:border-orange-500 text-sm font-semibold transition-all resize-none"
             />
           </div>

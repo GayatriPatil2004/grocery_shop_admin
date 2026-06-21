@@ -1,8 +1,7 @@
 import { 
   isFirebaseConfigured, 
   auth, 
-  db, 
-  storage 
+  db 
 } from './firebase';
 import { 
   signInWithEmailAndPassword, 
@@ -17,13 +16,11 @@ import {
   updateDoc, 
   deleteDoc, 
   query, 
-  orderBy 
+  orderBy,
+  where,
+  serverTimestamp 
 } from 'firebase/firestore';
-import { 
-  ref, 
-  uploadBytes, 
-  getDownloadURL 
-} from 'firebase/storage';
+import { uploadToCloudinary } from './cloudinaryUpload';
 
 // ==========================================
 // MOCK DATA PRESETS (For LocalStorage Fallback)
@@ -158,11 +155,27 @@ export const categoryService = {
     }
   },
 
-  addCategory: async (categoryData) => {
+  addCategory: async (categoryData, imageFile) => {
+    let imageUrl = categoryData.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400';
+
+    if (imageFile) {
+      if (isFirebaseConfigured) {
+        imageUrl = await uploadToCloudinary(imageFile, 'categories');
+      } else {
+        imageUrl = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.readAsDataURL(imageFile);
+        });
+      }
+    }
+
     const newCat = {
       ...categoryData,
-      createdAt: new Date().toISOString()
+      image: imageUrl,
+      createdAt: isFirebaseConfigured ? serverTimestamp() : new Date().toISOString()
     };
+
     if (isFirebaseConfigured) {
       const docRef = await addDoc(collection(db, 'categories'), newCat);
       return docRef.id;
@@ -176,15 +189,35 @@ export const categoryService = {
     }
   },
 
-  updateCategory: async (id, categoryData) => {
+  updateCategory: async (id, categoryData, imageFile) => {
+    let imageUrl = categoryData.image;
+
+    if (imageFile) {
+      if (isFirebaseConfigured) {
+        imageUrl = await uploadToCloudinary(imageFile, 'categories');
+      } else {
+        imageUrl = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.readAsDataURL(imageFile);
+        });
+      }
+    }
+
+    const updatedData = {
+      ...categoryData,
+      image: imageUrl,
+      updatedAt: isFirebaseConfigured ? serverTimestamp() : new Date().toISOString()
+    };
+
     if (isFirebaseConfigured) {
       const docRef = doc(db, 'categories', id);
-      await updateDoc(docRef, categoryData);
+      await updateDoc(docRef, updatedData);
     } else {
       const list = getLocalDB('categories_db', DEFAULT_CATEGORIES);
       const index = list.findIndex(c => c.id === id);
       if (index !== -1) {
-        list[index] = { ...list[index], ...categoryData };
+        list[index] = { ...list[index], ...updatedData };
         setLocalDB('categories_db', list);
       }
     }
@@ -214,16 +247,21 @@ export const productService = {
     }
   },
 
+  /**
+   * Compression is handled server-side by Cloudinary.
+   * Client-side compression is disabled for speed.
+   */
+  compressImage: async (file) => {
+    return file;
+  },
+
   addProduct: async (productData, imageFile) => {
     let imageUrl = productData.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400';
 
     if (imageFile) {
       if (isFirebaseConfigured) {
-        const storageRef = ref(storage, `products/${Date.now()}_${imageFile.name}`);
-        await uploadBytes(storageRef, imageFile);
-        imageUrl = await getDownloadURL(storageRef);
+        imageUrl = await uploadToCloudinary(imageFile, 'products');
       } else {
-        // Mock image file using base64 preview
         imageUrl = await new Promise((resolve) => {
           const reader = new FileReader();
           reader.onloadend = () => resolve(reader.result);
@@ -235,7 +273,7 @@ export const productService = {
     const newProd = {
       ...productData,
       image: imageUrl,
-      createdAt: new Date().toISOString()
+      createdAt: isFirebaseConfigured ? serverTimestamp() : new Date().toISOString()
     };
 
     if (isFirebaseConfigured) {
@@ -256,9 +294,7 @@ export const productService = {
 
     if (imageFile) {
       if (isFirebaseConfigured) {
-        const storageRef = ref(storage, `products/${Date.now()}_${imageFile.name}`);
-        await uploadBytes(storageRef, imageFile);
-        imageUrl = await getDownloadURL(storageRef);
+        imageUrl = await uploadToCloudinary(imageFile, 'products');
       } else {
         imageUrl = await new Promise((resolve) => {
           const reader = new FileReader();
@@ -270,7 +306,8 @@ export const productService = {
 
     const updatedData = {
       ...productData,
-      image: imageUrl
+      image: imageUrl,
+      updatedAt: isFirebaseConfigured ? serverTimestamp() : new Date().toISOString()
     };
 
     if (isFirebaseConfigured) {
@@ -303,7 +340,15 @@ export const productService = {
 export const orderService = {
   getOrders: async () => {
     if (isFirebaseConfigured) {
-      const snap = await getDocs(query(collection(db, 'orders'), orderBy('createdAt', 'desc')));
+      const oneMonthAgo = new Date();
+      oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+
+      const q = query(
+        collection(db, 'orders'), 
+        where('createdAt', '>=', oneMonthAgo),
+        orderBy('createdAt', 'desc')
+      );
+      const snap = await getDocs(q);
       return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     } else {
       return getLocalDB('orders_db', DEFAULT_ORDERS);

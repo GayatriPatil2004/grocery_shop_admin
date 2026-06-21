@@ -69,7 +69,7 @@ describe('CategoryList Component', () => {
     // Verify form fields in modal are rendered via placeholder
     expect(screen.getByText('Create New Category')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('e.g. Groceries, Ice Cream, Beverages')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('https://example.com/image.jpg')).toBeInTheDocument();
+    expect(screen.getByText(/Upload Image/i)).toBeInTheDocument();
   });
 
   it('triggers delete confirmation modal and removes category on confirm', async () => {

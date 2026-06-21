@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Menu, Sun, Moon, User } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
+import SeedDataButton from '../ui/SeedDataButton';
 
 export default function Header({ onMenuOpen }) {
   const { user } = useAuth();
@@ -54,6 +55,8 @@ export default function Header({ onMenuOpen }) {
 
       {/* Right side: Actions & User context */}
       <div className="flex items-center gap-4">
+        <SeedDataButton />
+        
         {/* Dark Mode Switcher */}
         <button
           onClick={toggleTheme}
